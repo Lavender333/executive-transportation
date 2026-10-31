@@ -1,1 +1,4 @@
 node_modules/
+_site/
+public/dashboard.js
+public/booking.js
