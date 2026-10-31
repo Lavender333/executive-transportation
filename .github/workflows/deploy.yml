@@ -1,4 +1,4 @@
-name: Deploy Chemistry Executive Transportation
+name: Deploy Executive Transportation
 on:
   push:
     branches: [main]
