@@ -1,16 +1,36 @@
 import { client, config, isDemo, $, message } from './client.js';
-let requests = [], drivers = [], selected = null, pageNumber = 0, hasMore = false, sessionVersion = 0;
+let requests = [], drivers = [], selected = null, pageNumber = 0, hasMore = false, sessionVersion = 0, realtimeChannel = null, reloadTimer = null;
 const PAGE_SIZE = 50;
 const displayStatus = { pending: 'Awaiting review', confirmed: 'Confirmed', assigned: 'Driver assigned', completed: 'Completed', cancelled: 'Cancelled' };
 const element = (tag, text, className) => { const node = document.createElement(tag); node.textContent = text; if (className) node.className = className; return node; };
 function resetWorkspace() {
   sessionVersion++;
+  if (reloadTimer) { clearTimeout(reloadTimer); reloadTimer = null; }
+  if (realtimeChannel) { client.removeChannel(realtimeChannel); realtimeChannel = null; }
   requests = []; drivers = []; selected = null;
   $('requests').replaceChildren(); $('drivers').replaceChildren(); $('details').replaceChildren();
   $('staff-notes').value = '';
   $('detail-content').hidden = true; $('detail-empty').hidden = false;
   $('workspace').hidden = true; $('logout').hidden = true; $('setup-panel').hidden = true;
   $('login-panel').hidden = false;
+}
+function scheduleLiveRefresh() {
+  if (reloadTimer) return;
+  reloadTimer = setTimeout(async () => {
+    reloadTimer = null;
+    if (!document.hidden && !selected) await Promise.all([loadRequests(), loadDrivers()]);
+  }, 400);
+}
+function subscribeToLiveUpdates() {
+  if (isDemo || !config.realtime || realtimeChannel || typeof client.channel !== 'function') return;
+  realtimeChannel = client.channel('staff-dispatch-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ride_requests' }, scheduleLiveRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, scheduleLiveRefresh)
+    .subscribe(status => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        message('workspace-message', 'Live updates are temporarily unavailable. Use Refresh requests to check for new arrivals.', true);
+      }
+    });
 }
 async function loadRequests(append = false) {
   const version = sessionVersion;
@@ -106,6 +126,7 @@ async function openWorkspace() {
   }
   $('login-panel').hidden = true; $('setup-panel').hidden = true; $('workspace').hidden = false; $('logout').hidden = false;
   await Promise.all([loadRequests(), loadDrivers()]);
+  subscribeToLiveUpdates();
 }
 $('login-form').addEventListener('submit', async event => {
   event.preventDefault();
