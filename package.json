@@ -1,6 +1,16 @@
 {
   "name": "executive-transportation",
   "private": true,
-  "scripts": { "test": "node --test tests/site.test.cjs" },
-  "devDependencies": { "playwright": "1.62.1" }
+  "scripts": {
+    "test": "npm run build && node --test tests/*.test.cjs",
+    "build": "node scripts/build.cjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.14",
+    "esbuild": "0.28.2",
+    "playwright": "1.62.1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0"
+  }
 }
