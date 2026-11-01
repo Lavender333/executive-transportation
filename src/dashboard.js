@@ -79,9 +79,10 @@ function selectRequest(row) {
   for (const [label, value] of entries) $('details').append(element('dt', label), element('dd', value));
   $('request-status').value = row.status;
   $('staff-notes').value = row.staff_notes;
+  $('driver-link').disabled = row.status !== 'assigned';
   updateDriverOptions();
   message('request-message', '');
-  $('driver-link-result').replaceChildren();
+  message('driver-link-result', row.status === 'assigned' ? 'Create a private driver link to begin sharing live location with this customer.' : 'Customer tracking is available from the private link in their booking confirmation. Create a driver link after assigning the trip.');
   renderRequests();
   if (matchMedia('(max-width:800px)').matches) $('detail-panel').scrollIntoView({ block: 'start' });
 }
