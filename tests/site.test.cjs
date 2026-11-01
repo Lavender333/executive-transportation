@@ -39,11 +39,17 @@ test('Desktop and mobile navigation works without overflow', async t => {
   for (const width of [320,375,768,1440]) {
     const page = await visit(t, { viewport: { width, height: 900 } });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    for (const id of ['services','experience','request']) {
+    for (const id of ['services','experience','booking']) {
       await page.locator(`nav a[href="#${id}"]`).click();
       assert.ok(await page.evaluate(id => document.querySelector(`#${id} h2`).getBoundingClientRect().top >= document.querySelector('header').getBoundingClientRect().bottom, id));
     }
   }
+});
+test('The ride request starts on the opening screen', async t => {
+  const page = await visit(t, { viewport: { width: 1440, height: 900 } });
+  assert.equal(await page.locator('#booking').count(), 1);
+  assert.ok(await page.locator('#customer-name').isVisible());
+  assert.ok((await page.locator('#booking').boundingBox()).y < 900);
 });
 test('Customer details, valid passengers, future dates, and consent are required', async t => {
   const page = await visit(t); let requests = 0;
