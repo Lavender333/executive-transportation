@@ -126,7 +126,7 @@ async function login(page) { await page.goto(baseURL+'dashboard.html'); await pa
 test('Staff can receive, confirm, assign, and sign out of the dashboard', async t => {
   const page = await visit(t); const state = await mockStaff(page);
   await login(page); await page.locator('#workspace').waitFor({state:'visible'});
-  await page.locator('.request').click(); assert.ok((await page.locator('#details').innerText()).includes('Flight AB123'));
+  await page.locator('.request').click(); assert.ok((await page.locator('#details').innerText()).includes('Flight AB123')); assert.equal(await page.locator('#driver-link').isDisabled(),true);
   await page.selectOption('#request-status','confirmed'); await page.locator('#request-form button').click();
   await page.waitForFunction(() => document.getElementById('request-message').textContent.startsWith('Saved.'));
   assert.equal(state.patches[0].status,'confirmed');
@@ -135,6 +135,7 @@ test('Staff can receive, confirm, assign, and sign out of the dashboard', async 
   await page.selectOption('#request-status','assigned'); await page.selectOption('#assigned-driver','22222222-2222-4222-8222-222222222222'); await page.locator('#request-form button').click();
   await page.waitForFunction(() => document.getElementById('request-message').textContent.startsWith('Saved.'));
   assert.equal(state.patches.at(-1).driver_id,'22222222-2222-4222-8222-222222222222');
+  assert.equal(await page.locator('#driver-link').isDisabled(),false);
   assert.equal(await page.locator('#assigned-count').innerText(),'1');
   if (process.env.DASHBOARD_SCREENSHOT) await page.screenshot({path:process.env.DASHBOARD_SCREENSHOT,fullPage:true});
   await page.locator('#logout').click(); assert.equal(await page.locator('#workspace').isVisible(),false); assert.equal(await page.locator('#requests').innerText(),'');
