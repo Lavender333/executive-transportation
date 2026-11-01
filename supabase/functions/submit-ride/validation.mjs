@@ -7,6 +7,8 @@ export function validateRequest(input, now = new Date()) {
     if (value.length < min || value.length > max) throw new Error(`Invalid ${key.replaceAll('_', ' ')}.`);
     return value;
   };
+  const tracking_token = string('tracking_token', 64, 64);
+  if (!/^[a-f0-9]{64}$/.test(tracking_token)) throw new Error('Invalid tracking token.');
   const id = string('id', 36, 36);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw new Error('Invalid request reference.');
   const customer_name = string('customer_name', 1, 100);
@@ -31,5 +33,5 @@ export function validateRequest(input, now = new Date()) {
   if (!Number.isInteger(input.passengers) || input.passengers < 1 || input.passengers > 30) throw new Error('Passengers must be a whole number from 1 to 30.');
   if (input.consent !== true) throw new Error('Please agree to be contacted about your request.');
   if (input.website) throw new Error('Unable to accept this request.');
-  return { id, customer_name, email, phone, service, pickup_date, pickup_time, pickup_timezone, passengers: input.passengers, pickup: string('pickup', 1, 150), destination: string('destination', 1, 150), notes: string('notes', 0, 600) };
+  return { tracking_token, id, customer_name, email, phone, service, pickup_date, pickup_time, pickup_timezone, passengers: input.passengers, pickup: string('pickup', 1, 150), destination: string('destination', 1, 150), notes: string('notes', 0, 600) };
 }

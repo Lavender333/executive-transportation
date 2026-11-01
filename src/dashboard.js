@@ -1,4 +1,4 @@
-import { client, $, message } from './client.js';
+import { client, config, isDemo, $, message } from './client.js';
 let requests = [], drivers = [], selected = null, pageNumber = 0, hasMore = false, sessionVersion = 0;
 const PAGE_SIZE = 50;
 const displayStatus = { pending: 'Awaiting review', confirmed: 'Confirmed', assigned: 'Driver assigned', completed: 'Completed', cancelled: 'Cancelled' };
@@ -61,6 +61,7 @@ function selectRequest(row) {
   $('staff-notes').value = row.staff_notes;
   updateDriverOptions();
   message('request-message', '');
+  $('driver-link-result').replaceChildren();
   renderRequests();
   if (matchMedia('(max-width:800px)').matches) $('detail-panel').scrollIntoView({ block: 'start' });
 }
@@ -175,6 +176,17 @@ async function init() {
   if (!client) { message('login-message', 'The booking dashboard is not connected yet. Please contact the site administrator.', true); $('login-form').querySelector('button').disabled = true; return; }
   client.auth.onAuthStateChange(event => { if (event === 'SIGNED_OUT') resetWorkspace(); });
   const params = new URLSearchParams(location.hash.slice(1));
+  if (params.has('error_description')) {
+    history.replaceState(null, '', location.pathname + location.search);
+    message('login-message', 'This invitation or reset link is invalid or expired. Request a new one from the site administrator.', true);
+    return;
+  }
+  if (params.has('access_token') && params.has('refresh_token') && ['invite', 'recovery'].includes(params.get('type'))) {
+    history.replaceState(null, '', location.pathname + location.search);
+    const { error } = await client.auth.setSession({ access_token: params.get('access_token'), refresh_token: params.get('refresh_token') });
+    if (error) { message('login-message', 'This invitation is invalid or expired. Request a new one.', true); return; }
+    $('login-panel').hidden = true; $('setup-panel').hidden = false; return;
+  }
   if (params.has('setup')) {
     history.replaceState(null, '', location.pathname + location.search);
     const { error } = await client.auth.verifyOtp({ token_hash: params.get('setup'), type: params.get('type') === 'recovery' ? 'recovery' : 'invite' });
@@ -185,3 +197,20 @@ async function init() {
   if (session) await openWorkspace();
 }
 init().catch(() => message('login-message', 'Unable to connect. Reload the page to try again.', true));
+
+$('driver-link').addEventListener('click', async () => {
+  if (isDemo) { message('driver-link-result', 'Driver location sharing is available only for real assigned trips. This demo never reads or sends your location.'); return; }
+  if (!selected || selected.status !== 'assigned') { message('driver-link-result', 'Assign a driver and save first.', true); return; }
+  $('driver-link').disabled = true;
+  try {
+    const { data: { session } } = await client.auth.getSession();
+    const response = await fetch(config.url + '/functions/v1/track-ride', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: config.functionKey, Authorization: 'Bearer ' + config.functionKey }, body: JSON.stringify({ action: 'driver-link', id: selected.id, staff_token: session?.access_token }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to create link.');
+    const link = document.createElement('a');
+    link.href = new URL('driver.html', location.href).href + '#' + new URLSearchParams({ id: selected.id, token: result.token });
+    link.textContent = 'Open private driver location-sharing page';
+    $('driver-link-result').replaceChildren(link, document.createTextNode(' — Copy this link and send it only to the assigned driver. Creating a new link disables the previous one.'));
+  } catch (error) { message('driver-link-result', error.message, true); }
+  finally { $('driver-link').disabled = false; }
+});

@@ -85,7 +85,9 @@ test('Failed requests retain fields and retry with the same reference', async t 
   await submit(page); await page.locator('#confirmation.show').waitFor(); assert.equal(ids[0], ids[1]);
 });
 test('Unconfigured and JavaScript-disabled forms cannot pretend to accept requests', async t => {
-  const page = await browser.newPage(); t.after(() => page.close()); await page.goto(baseURL);
+  const page = await browser.newPage(); t.after(() => page.close());
+  await page.route('**/public/backend-config.js', route => route.fulfill({contentType:'text/javascript',body:'window.TRANSPORT_CONFIG={};'}));
+  await page.goto(baseURL);
   assert.equal(await page.locator('#submit-request').isDisabled(), true);
   assert.ok((await page.locator('#booking-status').innerText()).includes('not connected'));
   const disabled = await browser.newPage({ javaScriptEnabled: false }); t.after(() => disabled.close()); await disabled.goto(baseURL);
@@ -136,4 +138,29 @@ test('Unauthorized users are refused, and mobile dashboard fits', async t => {
   await page.waitForFunction(() => document.getElementById('login-message').textContent.includes('not authorized'));
   assert.equal(await page.locator('#workspace').isVisible(),false);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+});
+test('Demo login is isolated from production and can practice dispatch', async t => {
+  const page=await visit(t);let calls=0;await page.route(fakeURL+'/**',route=>{calls++;return route.abort();});
+  await page.goto(baseURL+'demo.html');await page.fill('#email','demo@example.test');await page.fill('#password','demo123');await page.locator('#login-form button').click();
+  await page.locator('#workspace').waitFor({state:'visible'});await page.locator('.request').click();await page.selectOption('#request-status','assigned');await page.selectOption('#assigned-driver','demo-driver');await page.locator('#request-form button').click();
+  await page.waitForFunction(()=>document.getElementById('request-message').textContent.startsWith('Saved.'));
+  assert.ok((await page.locator('.request').textContent()).includes('Driver assigned'),await page.locator('.request').innerText());
+  await page.locator('#driver-link').click();assert.ok((await page.locator('#driver-link-result').innerText()).includes('never reads or sends your location'));
+  assert.equal(calls,0);
+});
+test('Customer tracking shows genuine update timestamps and stale location labels',async t=>{
+  const page=await visit(t);let stale=false;
+  await page.route(fakeURL+'/functions/v1/track-ride',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:'assigned',driver:{name:'Test',vehicle:'Test sedan'},location:{lat:40.75,lng:-73.98,accuracy:15,updated_at:stale?'2030-06-15T10:00:00':'2030-06-15T12:00:00'}})}));
+  await page.goto(baseURL+'track.html#id='+ride.id+'&token='+'a'.repeat(64));
+  await page.waitForFunction(()=>document.getElementById('location-details').textContent.includes('Live location'));
+  assert.ok((await page.locator('#map-link').getAttribute('href')).includes('openstreetmap.org'));
+  stale=true;await page.locator('#refresh-tracking').click();await page.waitForFunction(()=>document.getElementById('location-details').textContent.includes('not live'));
+});
+test('Drivers explicitly start and stop location sharing',async t=>{
+  const page=await visit(t,{geolocation:{latitude:40.75,longitude:-73.98},permissions:['geolocation']});const sent=[];
+  await page.route(fakeURL+'/functions/v1/track-ride',route=>{sent.push(route.request().postDataJSON());return route.fulfill({status:200,contentType:'application/json',body:'{"saved":true}'});});
+  await page.goto(baseURL+'driver.html#id='+ride.id+'&token='+'b'.repeat(64));assert.equal(sent.length,0);
+  await page.locator('#start-sharing').click();await page.waitForFunction(()=>document.getElementById('tracking-message').textContent.includes('is active'));
+  assert.equal(sent[0].action,'location');assert.equal(sent[0].lat,40.75);
+  await page.locator('#stop-sharing').click();assert.equal(await page.locator('#start-sharing').isEnabled(),true);assert.ok((await page.locator('#tracking-message').innerText()).includes('stopped'));
 });

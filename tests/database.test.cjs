@@ -9,6 +9,7 @@ test('Database enforces staff-only access and validates assignments', async t =>
     create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
   `);
   await db.exec(fs.readFileSync('database/schema.sql', 'utf8'));
+  await db.exec(fs.readFileSync('database/tracking.sql', 'utf8'));
   await db.exec("insert into public.staff_access(email) values ('staff@example.test')");
   const ride = { id: 'f1db366b-20cd-42ca-b22c-ddf7c9fec55a', customer_name: 'Test Passenger', email: 'customer@example.test', phone: '+1 555 010 1234', service: 'Airport transfer', pickup_date: '2030-06-16', pickup_time: '14:30', pickup_timezone: 'America/New_York', passengers: 2, pickup: 'Test airport', destination: 'Test hotel' };
   const insert = `insert into public.ride_requests(${Object.keys(ride).join(',')}) values(${Object.keys(ride).map((_, i) => '$' + (i + 1)).join(',')})`;
@@ -43,6 +44,13 @@ test('Database enforces staff-only access and validates assignments', async t =>
   await db.query("update public.drivers set active=true where id=$1", [driver.id]);
   await db.query("update public.ride_requests set status='assigned',driver_id=$1", [driver.id]);
   assert.equal((await db.query('select status from public.ride_requests')).rows[0].status, 'assigned');
+  await db.exec('reset role; set role service_role');
+  const operationalTime = (await db.query('select updated_at from public.ride_requests')).rows[0].updated_at;
+  await db.query("update public.ride_requests set driver_token_hash='test-hash',driver_lat=40.75,driver_lng=-73.98,driver_accuracy=10,location_updated_at=now()");
+  assert.equal(+(await db.query('select updated_at from public.ride_requests')).rows[0].updated_at, +operationalTime, 'Location updates do not conflict with dispatcher edits');
+  await db.query("update public.ride_requests set status='completed'");
+  const finished=(await db.query('select driver_token_hash,driver_lat from public.ride_requests')).rows[0];
+  assert.equal(finished.driver_token_hash,null);assert.equal(finished.driver_lat,null);
   await db.exec('reset role');
   await db.exec("delete from public.staff_access where email='staff@example.test'");
   await db.exec('set role authenticated');

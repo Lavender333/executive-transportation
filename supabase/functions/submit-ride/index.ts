@@ -17,6 +17,9 @@ Deno.serve(async (request: Request) => {
     raw += decoder.decode();
     let ride;
     try { ride = validateRequest(JSON.parse(raw)); } catch (error) { return reply({ error: error instanceof Error ? error.message : 'Invalid request.' }, 400); }
+    const trackingToken = ride.tracking_token;
+    delete ride.tracking_token;
+    ride.customer_token_hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(trackingToken)))).map(b => b.toString(16).padStart(2, '0')).join('');
     const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const db = createClient(Deno.env.get('SUPABASE_URL')!, secret, { auth: { persistSession: false, autoRefreshToken: false } });
     // Salted identifiers limit repeat submissions without storing raw network addresses.

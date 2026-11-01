@@ -1,7 +1,8 @@
 const form = document.getElementById('booking');
 const $ = id => document.getElementById(id);
 const config = window.TRANSPORT_CONFIG || {};
-let requestId = crypto.randomUUID(), sending = false;
+const newToken = () => Array.from(crypto.getRandomValues(new Uint8Array(32))).map(x => x.toString(16).padStart(2,'0')).join('');
+let requestId = crypto.randomUUID(), trackingToken = newToken(), sending = false;
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 function updateDate() {
   const now = new Date();
@@ -20,8 +21,8 @@ const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValue
 const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 [...new Set([localZone, 'UTC', ...zones])].forEach(zone => $('timezone').append(new Option(zone.replaceAll('_', ' '), zone)));
 $('timezone').value = localZone;
-form.addEventListener('input', () => { if (sending) return; clearResult(); validateText(); updateDate(); requestId = crypto.randomUUID(); });
-form.addEventListener('change', () => { if (!sending) { clearResult(); updateDate(); requestId = crypto.randomUUID(); } });
+form.addEventListener('input', () => { if (sending) return; clearResult(); validateText(); updateDate(); requestId = crypto.randomUUID(); trackingToken = newToken(); });
+form.addEventListener('change', () => { if (!sending) { clearResult(); updateDate(); requestId = crypto.randomUUID(); trackingToken = newToken(); } });
 form.addEventListener('focusin', updateDate);
 window.addEventListener('focus', updateDate);
 form.addEventListener('submit', async event => {
@@ -31,7 +32,7 @@ form.addEventListener('submit', async event => {
   if (!form.reportValidity()) return;
   const value = id => $(id).value.trim();
   const payload = {
-    id: requestId, customer_name: value('customer-name'), email: value('customer-email'), phone: value('customer-phone'),
+    id: requestId, tracking_token: trackingToken, customer_name: value('customer-name'), email: value('customer-email'), phone: value('customer-phone'),
     service: value('type'), pickup_date: value('date'), pickup_time: value('time'), pickup_timezone: value('timezone'),
     passengers: Number(value('passengers')), pickup: value('pickup'), destination: value('dropoff'), notes: value('notes'), consent: $('consent').checked, website: value('website')
   };
@@ -50,8 +51,11 @@ form.addEventListener('submit', async event => {
     if (data.id !== requestId || data.status !== 'received') throw new Error('We could not verify receipt. Please retry without changing your details.');
     const heading = document.createElement('strong'); heading.textContent = 'Request received — awaiting confirmation.';
     const reference = document.createElement('p'); reference.textContent = `Your reference: ${data.id}. Our team will contact you using the details you provided. Your ride is not booked until the team confirms availability and pricing.`;
-    $('confirmation').append(heading, reference); $('confirmation').classList.add('show');
-    form.reset(); $('timezone').value = localZone; requestId = crypto.randomUUID();
+    const trackingLink = document.createElement('a'); trackingLink.className = 'btn'; trackingLink.textContent = 'Track your ride';
+    trackingLink.href = 'track.html#' + new URLSearchParams({ id: requestId, token: trackingToken }).toString();
+    const trackingNote = document.createElement('p'); trackingNote.textContent = 'Save this private tracking link. It shows your request status and the driver’s location when they start sharing.';
+    $('confirmation').append(heading, reference, trackingLink, trackingNote); $('confirmation').classList.add('show');
+    form.reset(); $('timezone').value = localZone; requestId = crypto.randomUUID(); trackingToken = newToken();
     $('booking-status').textContent = '';
     $('confirmation').scrollIntoView({ behavior: reducedMotion.matches ? 'instant' : 'smooth', block: 'nearest' });
   } catch (error) {

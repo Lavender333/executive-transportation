@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const { transformSync } = require('esbuild');
-const valid = { id:'f1db366b-20cd-42ca-b22c-ddf7c9fec55a',customer_name:'Test Passenger',email:'customer@example.test',phone:'5550101234',service:'Airport transfer',pickup_date:'',pickup_time:'14:30',pickup_timezone:'UTC',passengers:1,pickup:'Test airport',destination:'Test hotel',notes:'',consent:true,website:'' };
+const valid = { tracking_token: "a".repeat(64), id:'f1db366b-20cd-42ca-b22c-ddf7c9fec55a',customer_name:'Test Passenger',email:'customer@example.test',phone:'5550101234',service:'Airport transfer',pickup_date:'',pickup_time:'14:30',pickup_timezone:'UTC',passengers:1,pickup:'Test airport',destination:'Test hotel',notes:'',consent:true,website:'' };
 valid.pickup_date = new Date(Date.now()+86400000).toISOString().slice(0,10);
 async function handler(options={}) {
   const { validateRequest } = await import('../supabase/functions/submit-ride/validation.mjs');
@@ -36,7 +36,7 @@ test('Request endpoint validates, rate limits, and accepts only safe fields',asy
 });
 test('Duplicate retries are accepted only for matching original details',async()=>{
   const {validateRequest}=await import('../supabase/functions/submit-ride/validation.mjs');
-  const previous={...validateRequest(valid),pickup_time:'14:30:00'};
+  const previous={...validateRequest(valid),pickup_time:'14:30:00',customer_token_hash:require('node:crypto').createHash('sha256').update(valid.tracking_token).digest('hex')}; delete previous.tracking_token;
   const same=await handler({duplicate:true,previous});assert.equal((await same.serve(request(valid))).status,201);
   const changed=await handler({duplicate:true,previous:{...previous,pickup:'Different pickup'}});assert.equal((await changed.serve(request(valid))).status,409);
 });

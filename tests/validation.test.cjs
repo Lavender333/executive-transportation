@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const valid = { id: 'f1db366b-20cd-42ca-b22c-ddf7c9fec55a', customer_name: ' Test Passenger ', email: 'TEST@example.test', phone: '+1 555 010 1234', service: 'Airport transfer', pickup_date: '2030-06-16', pickup_time: '14:30', pickup_timezone: 'America/New_York', passengers: 2, pickup: 'Test airport', destination: 'Test hotel', notes: '<img src=x>', consent: true, website: '' };
+const valid = { tracking_token: "a".repeat(64), id: 'f1db366b-20cd-42ca-b22c-ddf7c9fec55a', customer_name: ' Test Passenger ', email: 'TEST@example.test', phone: '+1 555 010 1234', service: 'Airport transfer', pickup_date: '2030-06-16', pickup_time: '14:30', pickup_timezone: 'America/New_York', passengers: 2, pickup: 'Test airport', destination: 'Test hotel', notes: '<img src=x>', consent: true, website: '' };
 test('Server validates customer requests and ignores privileged fields', async () => {
   const { validateRequest } = await import('../supabase/functions/submit-ride/validation.mjs');
   const now = new Date('2030-06-15T12:00:00Z');
