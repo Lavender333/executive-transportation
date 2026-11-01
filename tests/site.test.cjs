@@ -146,6 +146,9 @@ test('Demo login is isolated from production and can practice dispatch', async t
   await page.waitForFunction(()=>document.getElementById('request-message').textContent.startsWith('Saved.'));
   assert.ok((await page.locator('.request').textContent()).includes('Driver assigned'),await page.locator('.request').innerText());
   await page.locator('#driver-link').click();assert.ok((await page.locator('#driver-link-result').innerText()).includes('never reads or sends your location'));
+  await page.locator('#logout').click();
+  await page.fill('#email','demo@example.test');await page.fill('#password','demo123');await page.locator('#login-form button').click();
+  await page.waitForFunction(()=>document.querySelector('.request')?.textContent.includes('Awaiting review'));
   assert.equal(calls,0);
 });
 test('Customer tracking shows genuine update timestamps and stale location labels',async t=>{

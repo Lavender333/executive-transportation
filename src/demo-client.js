@@ -4,7 +4,7 @@ export function createDemoClient() {
   let listeners=[];
   const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
   const initial={drivers:[{id:'demo-driver',name:'Jordan Sample',phone:'555-010-0200',vehicle:'Black sedan / DEMO',active:true,updated_at:'2026-01-01T00:00:00Z'}],ride_requests:[{id:'demo-request',customer_name:'Alex Sample',email:'alex@example.test',phone:'555-010-0100',service:'Airport transfer',pickup_date:tomorrow,pickup_time:'14:30:00',pickup_timezone:'America/New_York',passengers:2,pickup:'Sample Airport',destination:'Sample Hotel',notes:'Practice request — no real passenger.',status:'pending',driver_id:null,staff_notes:'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()}],staff_access:[{email:'demo@example.test'}]};
-  let data; try{data=JSON.parse(sessionStorage.getItem(key))||initial;}catch{data=initial;}
+  let data; try{data=JSON.parse(sessionStorage.getItem(key))||structuredClone(initial);}catch{data=structuredClone(initial);}
   const persist=()=>sessionStorage.setItem(key,JSON.stringify(data));
   const session=()=>sessionStorage.getItem(authKey)?{access_token:'demo-only',user:{email:'demo@example.test'}}:null;
   function from(table){
@@ -23,7 +23,7 @@ export function createDemoClient() {
   }
   return {from,auth:{
     async signInWithPassword({email,password}){if(email.toLowerCase()!=='demo@example.test'||password!=='demo123')return{error:{message:'Incorrect demo credentials'}};sessionStorage.setItem(authKey,'yes');return{data:{session:session()},error:null};},
-    async signOut(){sessionStorage.removeItem(authKey);sessionStorage.removeItem(key);listeners.forEach(fn=>fn('SIGNED_OUT'));return{error:null};},
+    async signOut(){sessionStorage.removeItem(authKey);sessionStorage.removeItem(key);data=structuredClone(initial);listeners.forEach(fn=>fn('SIGNED_OUT'));return{error:null};},
     async getSession(){return{data:{session:session()}};},onAuthStateChange(fn){listeners.push(fn);return{data:{subscription:{unsubscribe(){listeners=listeners.filter(x=>x!==fn);}}}};}
   }};
 }
