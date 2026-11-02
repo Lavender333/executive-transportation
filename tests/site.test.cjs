@@ -183,3 +183,9 @@ test('Customers can explicitly share only on an assigned trip',async t=>{
   assert.equal(sent.find(payload=>payload.action==='customer-location').lat,40.75);
   await page.locator('#stop-sharing').click();assert.equal(await page.locator('#start-sharing').isEnabled(),true);
 });
+test('Assigned customers and drivers can exchange messages and request a call',async t=>{
+  const page=await visit(t);const sent=[];
+  await page.route(fakeURL+'/functions/v1/track-ride',route=>{const payload=route.request().postDataJSON();sent.push(payload);const body=payload.action==='read'?{status:'assigned',driver:{name:'Test',vehicle:'Sedan'},location:null,messages:[]}:payload.action==='driver-read'?{status:'assigned',customer_location:null,messages:[]}:{sent:true};return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});});
+  await page.goto(baseURL+'track.html#id='+ride.id+'&token='+'a'.repeat(64));await page.locator('#trip-messages').waitFor({state:'visible'});await page.fill('#message-body','I am at the main entrance.');await page.locator('#message-form button[type="submit"]').click();await page.waitForFunction(()=>document.getElementById('message-status').textContent==='Message sent.');
+  assert.equal(sent.find(payload=>payload.action==='customer-message').body,'I am at the main entrance.');await page.locator('#request-call').click();await page.waitForFunction(()=>document.getElementById('message-status').textContent.includes('Call request sent.'));assert.equal(sent.find(payload=>payload.call_request).action,'customer-message');
+});

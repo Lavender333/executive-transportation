@@ -11,12 +11,14 @@ test('Database enforces staff-only access and validates assignments', async t =>
   await db.exec(fs.readFileSync('database/schema.sql', 'utf8'));
   await db.exec(fs.readFileSync('database/tracking.sql', 'utf8'));
   await db.exec(fs.readFileSync('database/customer-location-sharing.sql', 'utf8'));
+  await db.exec(fs.readFileSync('database/trip-messages.sql', 'utf8'));
   await db.exec("insert into public.staff_access(email) values ('staff@example.test')");
   const ride = { id: 'f1db366b-20cd-42ca-b22c-ddf7c9fec55a', customer_name: 'Test Passenger', email: 'customer@example.test', phone: '+1 555 010 1234', service: 'Airport transfer', pickup_date: '2030-06-16', pickup_time: '14:30', pickup_timezone: 'America/New_York', passengers: 2, pickup: 'Test airport', destination: 'Test hotel' };
   const insert = `insert into public.ride_requests(${Object.keys(ride).join(',')}) values(${Object.keys(ride).map((_, i) => '$' + (i + 1)).join(',')})`;
   await db.exec('set role service_role'); await db.query(insert, Object.values(ride)); await db.exec('reset role');
   await db.exec('set role anon');
   await assert.rejects(db.query('select * from public.ride_requests'), /permission denied/);
+  await assert.rejects(db.query('select * from public.trip_messages'), /permission denied/);
   await assert.rejects(db.query(insert, Object.values(ride)), /permission denied/);
   await assert.rejects(db.query("select public.consume_request_limit('x')"), /permission denied/);
   await db.exec('reset role');
