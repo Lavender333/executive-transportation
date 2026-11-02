@@ -33,6 +33,20 @@ Deno.serve(async request=>{
       if(!data?.length)return reply({error:'This tracking link is no longer active.'},410);
       return reply({saved:true});
     }
+    if(body.action==='customer-location'){
+      const {lat,lng,accuracy}=body;
+      if(!Number.isFinite(lat)||lat < -90||lat > 90||!Number.isFinite(lng)||lng < -180||lng > 180||!Number.isFinite(accuracy)||accuracy < 0||accuracy>100000)return reply({error:'Invalid location.'},400);
+      const {data,error}=await db.from('ride_requests').update({customer_lat:lat,customer_lng:lng,customer_accuracy:accuracy,customer_location_updated_at:new Date().toISOString()}).eq('id',body.id).eq('customer_token_hash',tokenHash).eq('status','assigned').not('driver_id','is',null).select('id');
+      if(error)return reply({error:'Unable to save location.'},503);
+      if(!data?.length)return reply({error:'Customer location sharing is available after a driver is assigned.'},410);
+      return reply({saved:true});
+    }
+    if(body.action==='driver-read'){
+      const {data:ride,error}=await db.from('ride_requests').select('status,customer_lat,customer_lng,customer_accuracy,customer_location_updated_at').eq('id',body.id).eq('driver_token_hash',tokenHash).eq('status','assigned').not('driver_id','is',null).maybeSingle();
+      if(error)return reply({error:'Tracking is temporarily unavailable.'},503);
+      if(!ride)return reply({error:'This tracking link is no longer active.'},410);
+      return reply({status:ride.status,customer_location:ride.customer_location_updated_at?{lat:ride.customer_lat,lng:ride.customer_lng,accuracy:ride.customer_accuracy,updated_at:ride.customer_location_updated_at}:null});
+    }
     if(body.action==='read'){
       const {data:ride,error}=await db.from('ride_requests').select('status,driver_id,driver_lat,driver_lng,driver_accuracy,location_updated_at').eq('id',body.id).eq('customer_token_hash',tokenHash).maybeSingle();
       if(error)return reply({error:'Tracking is temporarily unavailable.'},503);
