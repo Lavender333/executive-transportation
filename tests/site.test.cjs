@@ -168,9 +168,18 @@ test('Customer tracking shows genuine update timestamps and stale location label
 });
 test('Drivers explicitly start and stop location sharing',async t=>{
   const page=await visit(t,{geolocation:{latitude:40.75,longitude:-73.98},permissions:['geolocation']});const sent=[];
-  await page.route(fakeURL+'/functions/v1/track-ride',route=>{sent.push(route.request().postDataJSON());return route.fulfill({status:200,contentType:'application/json',body:'{"saved":true}'});});
-  await page.goto(baseURL+'driver.html#id='+ride.id+'&token='+'b'.repeat(64));assert.equal(sent.length,0);
+  await page.route(fakeURL+'/functions/v1/track-ride',route=>{const payload=route.request().postDataJSON();sent.push(payload);return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(payload.action==='driver-read'?{status:'assigned',customer_location:null}:{saved:true})});});
+  await page.goto(baseURL+'driver.html#id='+ride.id+'&token='+'b'.repeat(64));await page.waitForFunction(()=>document.getElementById('customer-location-details').textContent.includes('not sharing'));
+  assert.ok(sent.every(payload=>payload.action==='driver-read'));
   await page.locator('#start-sharing').click();await page.waitForFunction(()=>document.getElementById('tracking-message').textContent.includes('is active'));
-  assert.equal(sent[0].action,'location');assert.equal(sent[0].lat,40.75);
+  assert.equal(sent.find(payload=>payload.action==='location').lat,40.75);
   await page.locator('#stop-sharing').click();assert.equal(await page.locator('#start-sharing').isEnabled(),true);assert.ok((await page.locator('#tracking-message').innerText()).includes('stopped'));
+});
+test('Customers can explicitly share only on an assigned trip',async t=>{
+  const page=await visit(t,{geolocation:{latitude:40.75,longitude:-73.98},permissions:['geolocation']});const sent=[];
+  await page.route(fakeURL+'/functions/v1/track-ride',route=>{const payload=route.request().postDataJSON();sent.push(payload);return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(payload.action==='read'?{status:'assigned',driver:{name:'Test',vehicle:'Sedan'},location:null}:{saved:true})});});
+  await page.goto(baseURL+'track.html#id='+ride.id+'&token='+'a'.repeat(64));await page.locator('#customer-sharing').waitFor({state:'visible'});
+  await page.locator('#start-sharing').click();await page.waitForFunction(()=>document.getElementById('customer-sharing-message').textContent.includes('is active'));
+  assert.equal(sent.find(payload=>payload.action==='customer-location').lat,40.75);
+  await page.locator('#stop-sharing').click();assert.equal(await page.locator('#start-sharing').isEnabled(),true);
 });
