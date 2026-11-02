@@ -3,6 +3,7 @@ const origin='https://lavender333.github.io';
 const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin'};
 const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers});
 const hash=async(value:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))).map(x=>x.toString(16).padStart(2,'0')).join('');
+const messages=async(db:any,rideId:string)=>{const {data,error}=await db.from('trip_messages').select('sender_role,message_type,body,created_at').eq('ride_id',rideId).order('created_at',{ascending:true}).limit(50);return error?[]:data||[];};
 Deno.serve(async request=>{
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers});
   if(request.method!=='POST')return reply({error:'Method not allowed.'},405);
@@ -45,7 +46,18 @@ Deno.serve(async request=>{
       const {data:ride,error}=await db.from('ride_requests').select('status,customer_lat,customer_lng,customer_accuracy,customer_location_updated_at').eq('id',body.id).eq('driver_token_hash',tokenHash).eq('status','assigned').not('driver_id','is',null).maybeSingle();
       if(error)return reply({error:'Tracking is temporarily unavailable.'},503);
       if(!ride)return reply({error:'This tracking link is no longer active.'},410);
-      return reply({status:ride.status,customer_location:ride.customer_location_updated_at?{lat:ride.customer_lat,lng:ride.customer_lng,accuracy:ride.customer_accuracy,updated_at:ride.customer_location_updated_at}:null});
+      return reply({status:ride.status,customer_location:ride.customer_location_updated_at?{lat:ride.customer_lat,lng:ride.customer_lng,accuracy:ride.customer_accuracy,updated_at:ride.customer_location_updated_at}:null,messages:await messages(db,body.id)});
+    }
+    if(body.action==='customer-message'||body.action==='driver-message'){
+      if(typeof body.body!=='string'||!body.body.trim()||body.body.trim().length>500)return reply({error:'Enter a message up to 500 characters.'},400);
+      const column=body.action==='customer-message'?'customer_token_hash':'driver_token_hash';
+      const sender=body.action==='customer-message'?'customer':'driver';
+      const {data:ride,error:rideError}=await db.from('ride_requests').select('id').eq('id',body.id).eq(column,tokenHash).eq('status','assigned').not('driver_id','is',null).maybeSingle();
+      if(rideError)return reply({error:'Unable to send message.'},503);
+      if(!ride)return reply({error:'This trip is not available for messaging.'},410);
+      const {error}=await db.from('trip_messages').insert({ride_id:body.id,sender_role:sender,body:body.body.trim(),message_type:body.call_request?'call_request':'message'});
+      if(error)return reply({error:'Unable to send message.'},503);
+      return reply({sent:true});
     }
     if(body.action==='read'){
       const {data:ride,error}=await db.from('ride_requests').select('status,driver_id,driver_lat,driver_lng,driver_accuracy,location_updated_at').eq('id',body.id).eq('customer_token_hash',tokenHash).maybeSingle();
@@ -53,7 +65,7 @@ Deno.serve(async request=>{
       if(!ride)return reply({error:'Tracking link not found.'},404);
       let driver=null;
       if(ride.driver_id){const {data}=await db.from('drivers').select('name,vehicle').eq('id',ride.driver_id).maybeSingle();if(data)driver={name:data.name.split(' ')[0],vehicle:data.vehicle};}
-      return reply({status:ride.status,driver,location:ride.status==='assigned'&&ride.location_updated_at?{lat:ride.driver_lat,lng:ride.driver_lng,accuracy:ride.driver_accuracy,updated_at:ride.location_updated_at}:null});
+      return reply({status:ride.status,driver,location:ride.status==='assigned'&&ride.location_updated_at?{lat:ride.driver_lat,lng:ride.driver_lng,accuracy:ride.driver_accuracy,updated_at:ride.location_updated_at}:null,messages:ride.status==='assigned'?await messages(db,body.id):[]});
     }
     return reply({error:'Unknown action.'},400);
   }catch{return reply({error:'Unable to process tracking request.'},400);}
